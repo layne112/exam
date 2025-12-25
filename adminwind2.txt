@@ -1,0 +1,185 @@
+using lab;
+using System;
+using System.Data.Entity;
+using System.Linq;
+using System.Windows;
+
+namespace lab
+{
+    public partial class AdminWindow : Window
+    {
+        public AdminWindow()
+        {
+            InitializeComponent();
+            LoadData();
+        }
+
+        private void LoadData()
+        {
+            try
+            {
+                using (var db = new TESTEntities())
+                {
+                    var users = db.User.Include("Role").OrderBy(u => u.User_ID).ToList();
+                    dgUsers.ItemsSource = users;
+
+                    var roles = db.Role.ToList();
+                    var roleColumn = dgUsers.Columns[3] as System.Windows.Controls.DataGridComboBoxColumn;
+                    if (roleColumn != null) roleColumn.ItemsSource = roles;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void btnAdd_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                using (var db = new TESTEntities())
+                {
+                    // Находим следующий свободный ID
+                    int nextId = 1;
+                    var existingIds = db.User.Select(u => u.User_ID).OrderBy(id => id).ToList();
+
+                    for (int i = 1; i <= existingIds.Count + 1; i++)
+                    {
+                        if (!existingIds.Contains(i))
+                        {
+                            nextId = i;
+                            break;
+                        }
+                    }
+
+                    var newUser = new User
+                    {
+                        User_ID = nextId,
+                        Login = $"user{nextId}",
+                        Password = "123",
+                        Role_ID = 2,
+                        Status = true
+                    };
+
+                    db.User.Add(newUser);
+                    db.SaveChanges();
+
+                    LoadData(); // Обновляем DataGrid
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка добавления: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void btnSave_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                using (var db = new TESTEntities())
+                {
+                    // Получаем текущие данные из DataGrid
+                    var gridUsers = dgUsers.Items.OfType<User>().ToList();
+
+                    foreach (var gridUser in gridUsers)
+                    {
+                        // Ищем пользователя в базе
+                        var dbUser = db.User.Find(gridUser.User_ID);
+
+                        if (dbUser == null)
+                        {
+                            // Новый пользователь (если был добавлен напрямую в DataGrid)
+                            db.User.Add(new User
+                            {
+                                User_ID = gridUser.User_ID,
+                                Login = gridUser.Login,
+                                Password = gridUser.Password,
+                                Role_ID = gridUser.Role_ID,
+                                Status = gridUser.Status
+                            });
+                        }
+                        else
+                        {
+                            // Обновляем существующего
+                            dbUser.Login = gridUser.Login;
+                            dbUser.Password = gridUser.Password;
+                            dbUser.Role_ID = gridUser.Role_ID;
+                            dbUser.Status = gridUser.Status;
+                        }
+                    }
+
+                    int changes = db.SaveChanges();
+
+                    if (changes > 0)
+                    {
+                        MessageBox.Show($"Сохранено изменений: {changes}", "Сохранено",
+                                      MessageBoxButton.OK, MessageBoxImage.Information);
+                        LoadData(); // Перезагружаем из базы
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка сохранения: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                LoadData(); // Восстанавливаем исходные данные
+            }
+        }
+
+        private void btnDelete_Click(object sender, RoutedEventArgs e)
+        {
+            if (dgUsers.SelectedItem is User selectedUser)
+            {
+                if (MessageBox.Show($"Удалить пользователя {selectedUser.Login}?", "Подтверждение",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        using (var db = new TESTEntities())
+                        {
+                            var userToDelete = db.User.Find(selectedUser.User_ID);
+                            if (userToDelete != null)
+                            {
+                                db.User.Remove(userToDelete);
+                                db.SaveChanges();
+
+                                // Пересортировка ID (опционально)
+                                // ReorderIds(db);
+
+                                LoadData();
+                                MessageBox.Show("Пользователь удален", "Удалено",
+                                              MessageBoxButton.OK, MessageBoxImage.Information);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Ошибка удаления: {ex.Message}", "Ошибка",
+                                      MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+
+        // Опционально: пересортировка ID по порядку
+        private void ReorderIds(TESTEntities db)
+        {
+            var users = db.User.OrderBy(u => u.User_ID).ToList();
+            int newId = 1;
+
+            foreach (var user in users)
+            {
+                user.User_ID = newId++;
+            }
+
+            db.SaveChanges();
+        }
+
+        private void btnLogout_Click(object sender, RoutedEventArgs e)
+        {
+            Application.Current.Windows.OfType<MainWindow>().FirstOrDefault()?.Show();
+            Close();
+        }
+    }
+}

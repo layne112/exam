@@ -1,0 +1,116 @@
+using lab;
+using System;
+using System.Linq;
+using System.Windows;
+
+namespace lab
+{
+    public partial class MainWindow : Window
+    {
+        private int loginAttempts = 0;
+        private const int MAX_ATTEMPTS = 3;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            UpdateAttemptsLabel();
+        }
+
+        private void btnLogin_Click(object sender, RoutedEventArgs e)
+        {
+            string login = txtLogin.Text.Trim();
+            string password = txtPassword.Password;
+
+            if (string.IsNullOrEmpty(login) || string.IsNullOrEmpty(password))
+            {
+                lblMessage.Text = "Введите логин и пароль";
+                return;
+            }
+
+            try
+            {
+                using (var db = new TESTEntities())
+                {
+                    // Поиск пользователя
+                    var user = db.User.FirstOrDefault(u => u.Login == login &&
+                                                           u.Password == password);
+
+                    if (user != null)
+                    {
+                        // Проверка статуса (True = активен, False = заблокирован)
+                        if (user.Status == false) // Если Status = False - заблокирован
+                        {
+                            lblMessage.Text = "Ваш аккаунт заблокирован!";
+                            return;
+                        }
+
+                        // Получаем роль пользователя
+                        var role = db.Role.FirstOrDefault(r => r.Role_ID == user.Role_ID);
+
+                        // Успешная авторизация
+                        OpenRoleWindow(role, user);
+                        loginAttempts = 0;
+                        this.Hide();
+                    }
+                    else
+                    {
+                        loginAttempts++;
+                        UpdateAttemptsLabel();
+
+                        if (loginAttempts >= MAX_ATTEMPTS)
+                        {
+                            MessageBox.Show("Вы заблокированы! Превышено количество попыток входа.",
+                                          "Блокировка", MessageBoxButton.OK, MessageBoxImage.Error);
+                            Application.Current.Shutdown();
+                        }
+                        else
+                        {
+                            lblMessage.Text = $"Неверный логин или пароль. Осталось попыток: {MAX_ATTEMPTS - loginAttempts}";
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка подключения к базе данных: {ex.Message}",
+                              "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void UpdateAttemptsLabel()
+        {
+            lblAttempts.Text = $"Попыток: {loginAttempts}/{MAX_ATTEMPTS}";
+        }
+
+        private void OpenRoleWindow(Role role, User currentUser)
+        {
+            if (role == null)
+            {
+                MessageBox.Show("Роль не найдена!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            switch (role.Role_ID)
+            {
+                case 1: // Администратор (ID=1 по вашей таблице)
+                    var adminWindow = new AdminWindow();
+                    adminWindow.Show();
+                    break;
+
+                case 2: // Бухгалтер (ID=2)
+                    var accountantWindow = new RoleWindow("Окно бухгалтера", "Бухгалтер");
+                    accountantWindow.Show();
+                    break;
+
+                case 3: // Лаборант (ID=3)
+                    var labWindow = new RoleWindow("Окно лаборанта", "Лаборант");
+                    labWindow.Show();
+                    break;
+
+                default:
+                    MessageBox.Show("Неизвестная роль!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    break;
+            }
+        }
+    }
+}

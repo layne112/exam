@@ -1,0 +1,41 @@
+using lab;
+using System;
+using System.Linq;
+using System.Windows;
+
+namespace lab
+{
+    public partial class RoleWindow : Window
+    {
+        public RoleWindow(string title, string roleName)
+        {
+            InitializeComponent();
+            tbTitle.Text = title;
+            tbRole.Text = $"Вы вошли как: {roleName}";
+            this.Title = title;
+        }
+
+        private void btnLogout_Click(object sender, RoutedEventArgs e)
+        {
+            var mainWindow = Application.Current.Windows.OfType<MainWindow>().FirstOrDefault();
+            if (mainWindow != null)
+            {
+                mainWindow.Show();
+                mainWindow.txtLogin.Clear();
+                mainWindow.txtPassword.Clear();
+                mainWindow.lblMessage.Text = "";
+            }
+            this.Close();
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+
+            if (Application.Current.Windows.Count == 0)
+            {
+                Application.Current.Shutdown();
+            }
+        }
+    }
+}
